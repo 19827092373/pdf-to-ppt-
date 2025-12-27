@@ -1,0 +1,6 @@
+/* Base styles - Tailwind CSS is loaded via CDN */
+body {
+  margin: 0;
+  padding: 0;
+}
+

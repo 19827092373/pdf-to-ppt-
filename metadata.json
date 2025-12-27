@@ -1,0 +1,5 @@
+{
+  "name": "Teacher PPT Splitter",
+  "description": "A tool for teachers to crop PDF exercises and arrange them into handwriting-friendly PowerPoint slides.",
+  "requestFramePermissions": []
+}

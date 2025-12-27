@@ -1,0 +1,311 @@
+import React, { useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
+import { PdfCropper } from './components/PdfCropper';
+import { SlideList } from './components/SlideList';
+import { generatePPT } from './utils/pptGenerator';
+import { SlideData, CroppedImage, PDFDocument } from './types';
+import { FileUp, BookOpen, AlertCircle, CodeXml } from 'lucide-react';
+
+const App: React.FC = () => {
+  const [pdfDocument, setPdfDocument] = useState<PDFDocument | null>(null);
+  const [slides, setSlides] = useState<SlideData[]>([]);
+  const [fileName, setFileName] = useState<string>("presentation");
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
+  // Handle drag and drop
+  // Handle drag and drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+
+    // Disable drag upload in workspace (edit mode)
+    if (pdfDocument) return;
+
+    // Only show overlay if dragging files (not internal elements like slides)
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Only set to false if we are leaving the main container
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    // Disable drop in workspace
+    if (pdfDocument) return;
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      setError("请上传有效的 PDF 文件。");
+      return;
+    }
+
+    processFile(file);
+  };
+
+  const processFile = (file: File) => {
+    setIsLoading(true);
+    setError(null);
+    setFileName(file.name.replace('.pdf', ''));
+
+    // Check if PDF.js library is loaded
+    if (!window.pdfjsLib) {
+      setIsLoading(false);
+      setError("PDF.js 库未加载，请刷新页面重试。");
+      return;
+    }
+
+    const fileReader = new FileReader();
+    fileReader.onload = async function () {
+      const typedarray = new Uint8Array(this.result as ArrayBuffer);
+      try {
+        const loadingTask = window.pdfjsLib!.getDocument(typedarray);
+        const pdf = await loadingTask.promise;
+        setPdfDocument(pdf);
+        setSlides([]); // Reset slides on new file
+      } catch (err) {
+        console.error(err);
+        setError("无法加载 PDF，请尝试其他文件。");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fileReader.readAsArrayBuffer(file);
+  };
+
+  // Handle file upload
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      setError("请上传有效的 PDF 文件。");
+      return;
+    }
+
+    processFile(file);
+  };
+
+  // When a crop happens, create a new slide
+  const handleCropComplete = (image: CroppedImage) => {
+    const newSlide: SlideData = {
+      id: uuidv4(),
+      images: [image]
+    };
+    setSlides(prev => [...prev, newSlide]);
+  };
+
+  const handleDeleteSlide = (id: string) => {
+    setSlides(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleDeleteImage = (slideId: string, imgId: string) => {
+    setSlides(prev => {
+      return prev.map(slide => {
+        if (slide.id !== slideId) return slide;
+        const newImages = slide.images.filter(img => img.id !== imgId);
+        // If no images left, user can delete the empty slide manually or we can keep it empty
+        return { ...slide, images: newImages };
+      }).filter(slide => slide.images.length > 0); // Auto remove empty slides for cleaner UX
+    });
+  };
+
+  // Merge the specified slide into the previous one
+  const handleMergeUp = (slideId: string) => {
+    const index = slides.findIndex(s => s.id === slideId);
+    if (index <= 0) return;
+
+    const currentSlide = slides[index];
+    const prevSlide = slides[index - 1];
+
+    // Check if we can merge (max 2 images recommended for this layout)
+    if (prevSlide.images.length + currentSlide.images.length > 2) {
+      setError("无法合并：每页幻灯片最多允许 2 张图片。");
+      // Clear error after 3 seconds
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const mergedSlide = {
+      ...prevSlide,
+      images: [...prevSlide.images, ...currentSlide.images]
+    };
+
+    const newSlides = [...slides];
+    newSlides[index - 1] = mergedSlide;
+    newSlides.splice(index, 1); // Remove the current one
+
+    setSlides(newSlides);
+  };
+
+  // Reorder slides
+  const handleReorderSlides = (dragIndex: number, hoverIndex: number) => {
+    const dragSlide = slides[dragIndex];
+    if (!dragSlide) return;
+
+    const newSlides = [...slides];
+    newSlides.splice(dragIndex, 1);
+    newSlides.splice(hoverIndex, 0, dragSlide);
+    setSlides(newSlides);
+  };
+
+  const handleExport = async () => {
+    if (slides.length === 0) {
+      setError("请先添加至少一张幻灯片。");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      await generatePPT(slides, `${fileName}_习题.pptx`);
+    } catch (e) {
+      console.error(e);
+      setError("生成 PPT 文件时出错，请重试。");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div
+      className="flex flex-col h-screen overflow-hidden text-slate-800 relative"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Full Screen Drag Overlay */}
+      {isDragOver && (
+        <div className="absolute inset-0 bg-indigo-50/90 z-50 flex items-center justify-center border-4 border-indigo-500 border-dashed rounded-xl m-4 pointer-events-none transition-all duration-200">
+          <div className="text-center">
+            <FileUp className="w-20 h-20 text-indigo-500 mx-auto mb-4" />
+            <h3 className="text-3xl font-bold text-indigo-700">释放即可上传</h3>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 justify-between shadow-sm z-30">
+        <div className="flex items-center gap-3">
+          <div className="bg-indigo-600 p-2 rounded-lg text-white">
+            <BookOpen className="w-5 h-5" />
+          </div>
+          <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-600">
+            教师 PDF 转 PPT 工具
+          </h1>
+        </div>
+
+        {pdfDocument && (
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-slate-500">当前文件: <span className="font-semibold text-slate-800">{fileName}.pdf</span></span>
+            <label className="cursor-pointer text-indigo-600 hover:text-indigo-800 font-medium">
+              更换文件
+              <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
+            </label>
+          </div>
+        )}
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 flex overflow-hidden">
+        {!pdfDocument ? (
+          // Upload State
+          <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6 relative">
+            <div
+              className={`w-full max-w-md bg-white p-10 rounded-2xl shadow-xl border-2 transition-all duration-200 text-center border-slate-100`}
+            >
+              <div className="mx-auto w-20 h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-6">
+                <FileUp className="w-10 h-10 text-indigo-600" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">上传 PDF 文件</h2>
+              <p className="text-slate-500 mb-8">
+                点击下方按钮选择，或直接将文件<span className="text-indigo-600 font-bold">拖入页面的任意位置</span>
+              </p>
+
+              <label className="block w-full">
+                <span className="sr-only">选择 PDF</span>
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-slate-500
+                    file:mr-4 file:py-3 file:px-6
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-indigo-600 file:text-white
+                    hover:file:bg-indigo-700
+                    cursor-pointer"
+                />
+              </label>
+
+              {isLoading && (
+                <div className="mt-4 text-indigo-600 animate-pulse text-sm">正在加载 PDF...</div>
+              )}
+
+              {error && (
+                <div className="mt-6 p-3 bg-red-50 text-red-600 rounded-lg flex items-center justify-center gap-2 text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  {error}
+                </div>
+              )}
+            </div>
+
+            {/* Developer Credits - Redesigned UI */}
+            <div className="mt-12">
+              <div className="bg-white px-5 py-3 rounded-xl border border-slate-100 shadow-lg shadow-indigo-100/50 flex items-center gap-4 transition-transform hover:-translate-y-1 duration-300">
+                <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-md">
+                  <CodeXml className="w-7 h-7" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="text-xs text-slate-400 font-bold tracking-wider mb-0.5">软件开发</span>
+                  <span className="text-base font-bold text-slate-800">
+                    @感恩烧饼
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Workspace State
+          <>
+            {error && (
+              <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 p-3 bg-red-50 text-red-600 rounded-lg flex items-center gap-2 text-sm shadow-lg border border-red-200">
+                <AlertCircle className="w-4 h-4" />
+                {error}
+              </div>
+            )}
+            <div className="flex-1 h-full min-w-0">
+              <PdfCropper
+                pdfDocument={pdfDocument}
+                onCropComplete={handleCropComplete}
+              />
+            </div>
+            {/* Increased width from w-96 to w-[480px] */}
+            <div className="w-[480px] h-full border-l border-slate-200 shadow-xl z-20">
+              <SlideList
+                slides={slides}
+                onDeleteSlide={handleDeleteSlide}
+                onDeleteImage={handleDeleteImage}
+                onMergeUp={handleMergeUp}
+                onExport={handleExport}
+                onReorder={handleReorderSlides}
+              />
+            </div>
+          </>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default App;
