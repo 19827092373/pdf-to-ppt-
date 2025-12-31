@@ -268,7 +268,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
       {/* Main Scrollable Area */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-auto relative p-8 flex justify-center bg-slate-300"
+        className="flex-1 overflow-auto relative p-8 flex justify-start items-start bg-slate-300"
       >
         {/* Canvas Wrapper - Explicit dimensions ensure overlay covers perfectly */}
         <div
