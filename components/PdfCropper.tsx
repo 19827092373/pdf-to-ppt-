@@ -259,7 +259,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
             <ZoomOut className="w-5 h-5" />
           </button>
           <span className="text-xs text-slate-500 w-12 text-center select-none">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(s => Math.min(5.0, s + 0.1))} className="p-1 rounded hover:bg-slate-100">
+          <button onClick={() => setZoom(s => Math.min(10.0, s + 0.1))} className="p-1 rounded hover:bg-slate-100">
             <ZoomIn className="w-5 h-5" />
           </button>
         </div>
