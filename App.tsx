@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { PdfCropper } from './components/PdfCropper';
 import { SlideList } from './components/SlideList';
 import { generatePPT } from './utils/pptGenerator';
 import { SlideData, CroppedImage, PDFDocument } from './types';
-import { FileUp, BookOpen, AlertCircle, CodeXml } from 'lucide-react';
+import { FileUp, BookOpen, AlertCircle, CodeXml, CheckCircle } from 'lucide-react';
 
 const App: React.FC = () => {
   const [pdfDocument, setPdfDocument] = useState<PDFDocument | null>(null);
@@ -12,7 +12,16 @@ const App: React.FC = () => {
   const [fileName, setFileName] = useState<string>("presentation");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
+  // File name editing
+  const [isEditingFileName, setIsEditingFileName] = useState(false);
+  const [customFileName, setCustomFileName] = useState(fileName);
+
+  // Undo history
+  const [history, setHistory] = useState<SlideData[][]>([[]]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   // Handle drag and drop
   // Handle drag and drop
@@ -73,6 +82,8 @@ const App: React.FC = () => {
         const pdf = await loadingTask.promise;
         setPdfDocument(pdf);
         setSlides([]); // Reset slides on new file
+        setHistory([[]]); // Reset history
+        setHistoryIndex(0);
       } catch (err) {
         console.error(err);
         setError("无法加载 PDF，请尝试其他文件。");
@@ -96,27 +107,66 @@ const App: React.FC = () => {
     processFile(file);
   };
 
+  // Undo history functions
+  const undo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setSlides(history[newIndex]);
+    }
+  };
+
+  const addToHistory = (newSlides: SlideData[]) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newSlides);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  // Keyboard shortcut for undo (Ctrl+Z / Cmd+Z)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        undo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history, historyIndex]);
+
   // When a crop happens, create a new slide
   const handleCropComplete = (image: CroppedImage) => {
     const newSlide: SlideData = {
       id: uuidv4(),
       images: [image]
     };
-    setSlides(prev => [...prev, newSlide]);
+    setSlides(prev => {
+      const newSlides = [...prev, newSlide];
+      addToHistory(newSlides);
+      return newSlides;
+    });
   };
 
   const handleDeleteSlide = (id: string) => {
-    setSlides(prev => prev.filter(s => s.id !== id));
+    setSlides(prev => {
+      const newSlides = prev.filter(s => s.id !== id);
+      addToHistory(newSlides);
+      return newSlides;
+    });
   };
 
   const handleDeleteImage = (slideId: string, imgId: string) => {
     setSlides(prev => {
-      return prev.map(slide => {
+      const newSlides = prev.map(slide => {
         if (slide.id !== slideId) return slide;
         const newImages = slide.images.filter(img => img.id !== imgId);
         // If no images left, user can delete the empty slide manually or we can keep it empty
         return { ...slide, images: newImages };
       }).filter(slide => slide.images.length > 0); // Auto remove empty slides for cleaner UX
+      addToHistory(newSlides);
+      return newSlides;
     });
   };
 
@@ -146,6 +196,7 @@ const App: React.FC = () => {
     newSlides.splice(index, 1); // Remove the current one
 
     setSlides(newSlides);
+    addToHistory(newSlides);
   };
 
   // Reorder slides
@@ -157,6 +208,7 @@ const App: React.FC = () => {
     newSlides.splice(dragIndex, 1);
     newSlides.splice(hoverIndex, 0, dragSlide);
     setSlides(newSlides);
+    addToHistory(newSlides);
   };
 
   const handleExport = async () => {
@@ -167,8 +219,11 @@ const App: React.FC = () => {
     }
     setIsLoading(true);
     setError(null);
+    setSuccess(null);
     try {
       await generatePPT(slides, `${fileName}_习题.pptx`);
+      setSuccess("PPT 导出成功！");
+      setTimeout(() => setSuccess(null), 3000);
     } catch (e) {
       console.error(e);
       setError("生成 PPT 文件时出错，请重试。");
@@ -207,7 +262,42 @@ const App: React.FC = () => {
 
         {pdfDocument && (
           <div className="flex items-center gap-4 text-sm">
-            <span className="text-slate-500">当前文件: <span className="font-semibold text-slate-800">{fileName}.pdf</span></span>
+            {isEditingFileName ? (
+              <input
+                type="text"
+                value={customFileName}
+                onChange={(e) => setCustomFileName(e.target.value)}
+                onBlur={() => {
+                  setIsEditingFileName(false);
+                  if (customFileName.trim()) {
+                    setFileName(customFileName.trim());
+                  } else {
+                    setCustomFileName(fileName);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                  } else if (e.key === 'Escape') {
+                    setCustomFileName(fileName);
+                    setIsEditingFileName(false);
+                  }
+                }}
+                className="px-2 py-1 border border-indigo-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+                autoFocus
+              />
+            ) : (
+              <span
+                className="text-slate-500 cursor-pointer hover:text-indigo-600"
+                onClick={() => {
+                  setIsEditingFileName(true);
+                  setCustomFileName(fileName);
+                }}
+                title="点击编辑文件名"
+              >
+                当前文件: <span className="font-semibold text-slate-800">{fileName}.pdf</span>
+              </span>
+            )}
             <label className="cursor-pointer text-indigo-600 hover:text-indigo-800 font-medium">
               更换文件
               <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
@@ -284,14 +374,20 @@ const App: React.FC = () => {
                 {error}
               </div>
             )}
-            <div className="flex-1 h-full min-w-0">
+            {success && (
+              <div className="absolute top-20 left-1/2 transform -translate-x-1/2 z-50 p-3 bg-green-50 text-green-600 rounded-lg flex items-center gap-2 text-sm shadow-lg border border-green-200">
+                <CheckCircle className="w-4 h-4" />
+                {success}
+              </div>
+            )}
+            <div className="flex-1 h-full min-w-0 border-r border-slate-200">
               <PdfCropper
                 pdfDocument={pdfDocument}
                 onCropComplete={handleCropComplete}
               />
             </div>
             {/* Increased width from w-96 to w-[480px] */}
-            <div className="w-[480px] h-full border-l border-slate-200 shadow-xl z-20">
+            <div className="w-[320px] h-full border-l border-slate-200 shadow-xl z-20">
               <SlideList
                 slides={slides}
                 onDeleteSlide={handleDeleteSlide}

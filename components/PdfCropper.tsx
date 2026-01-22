@@ -209,6 +209,23 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
     }
   };
 
+  // Keyboard shortcuts for page navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Arrow keys for page navigation
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        changePage(-1);
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        changePage(1);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentPage, pdfDocument]);
+
   return (
     <div className="flex flex-col h-full bg-slate-100 border-r border-slate-200">
       {/* Toolbar */}
