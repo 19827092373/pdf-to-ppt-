@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Rect, CroppedImage, PDFDocument } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 
 interface PdfCropperProps {
   pdfDocument: PDFDocument;
@@ -12,6 +12,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
   const [renderScale, setRenderScale] = useState<number>(2.0); // Default to 2.0 (High Res)
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [zoom, setZoom] = useState<number>(1.0); // 1.0 = 100% display size relative to original PDF point size
+  const [rotation, setRotation] = useState<number>(0); // 0, 90, 180, 270
   const [isRendering, setIsRendering] = useState<boolean>(false);
 
   // Crop state
@@ -32,8 +33,8 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
     setIsRendering(true);
     try {
       const page = await pdfDocument.getPage(currentPage);
-      // Always render at high resolution
-      const viewport = page.getViewport({ scale: renderScale });
+      // Always render at high resolution with rotation
+      const viewport = page.getViewport({ scale: renderScale, rotation: rotation });
 
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
@@ -57,7 +58,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
     } finally {
       setIsRendering(false);
     }
-  }, [pdfDocument, currentPage, renderScale]); // Remove scale from dependency
+  }, [pdfDocument, currentPage, renderScale, rotation]); // Add rotation to dependency
 
   useEffect(() => {
     // Reset zoom when document changes, or keep it? 
@@ -261,6 +262,8 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
             <option value="2">2.0x (标准)</option>
             <option value="3">3.0x (超清)</option>
             <option value="4">4.0x (原画)</option>
+            <option value="6">6.0x (极清)</option>
+            <option value="8">8.0x (无损)</option>
           </select>
 
           <div className="w-px h-4 bg-slate-300 mx-1"></div>
@@ -270,6 +273,15 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
           </button>
           <button onClick={fitToPage} className="px-2 py-1 text-xs border rounded hover:bg-slate-100 font-medium">
             适应页面
+          </button>
+          <div className="w-px h-4 bg-slate-300 mx-1"></div>
+          <button
+            onClick={() => setRotation(r => (r + 90) % 360)}
+            className="px-2 py-1 text-xs border rounded hover:bg-slate-100 font-medium flex items-center gap-1"
+            title="旋转页面 (90°)"
+          >
+            <RotateCw className="w-3 h-3" />
+            {rotation}°
           </button>
           <div className="w-px h-4 bg-slate-300 mx-1"></div>
           <button onClick={() => setZoom(s => Math.max(0.1, s - 0.1))} className="p-1 rounded hover:bg-slate-100">
