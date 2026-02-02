@@ -1,4 +1,5 @@
-/* Base styles - Tailwind CSS is loaded via CDN */
+@import "tailwindcss";
+
 body {
   margin: 0;
   padding: 0;
