@@ -554,6 +554,13 @@ const App: React.FC = () => {
                 onFileChange={handleFileChange}
                 maxPdfs={MAX_PDFS}
               />
+              {/* Loading indicator for PDF upload */}
+              {isLoading && (
+                <div className="mx-4 mb-3 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm flex items-center gap-2 animate-pulse">
+                  <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <span>正在加载 PDF...</span>
+                </div>
+              )}
               <PdfCropper
                 pdfDocument={activePdfDocument}
                 onCropComplete={handleCropComplete}

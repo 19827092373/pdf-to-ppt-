@@ -1,3 +1,5 @@
+import { Tag } from 'lucide-react';
+
 interface SourceToggleProps {
   showSourceLabel: boolean;
   onToggle: (show: boolean) => void;
@@ -14,14 +16,24 @@ export default function SourceToggle({
   }
 
   return (
-    <label className="flex items-center gap-2 text-sm text-gray-600 mb-3 cursor-pointer select-none">
-      <input
-        type="checkbox"
-        checked={showSourceLabel}
-        onChange={(e) => onToggle(e.target.checked)}
-        className="w-4 h-4 text-blue-500 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-      />
-      <span>显示图片来源</span>
-    </label>
+    <div className="px-4 py-3 border-b border-slate-100">
+      <button
+        onClick={() => onToggle(!showSourceLabel)}
+        className={`
+          flex items-center gap-2 text-sm font-medium transition-all
+          ${showSourceLabel
+            ? 'text-indigo-600 bg-indigo-50'
+            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+          }
+          px-3 py-2 rounded-lg cursor-pointer select-none w-full
+        `}
+      >
+        <Tag size={16} />
+        <span>显示图片来源</span>
+        {showSourceLabel && (
+          <span className="ml-auto text-xs text-indigo-500 font-medium">已开启</span>
+        )}
+      </button>
+    </div>
   );
 }
