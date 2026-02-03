@@ -455,11 +455,6 @@ const App: React.FC = () => {
             )}
             <label
               className={`cursor-pointer font-medium ${pdfDocuments.length >= MAX_PDFS ? 'text-gray-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-800'}`}
-              onClick={() => {
-                if (pdfDocuments.length < MAX_PDFS) {
-                  triggerFileUpload();
-                }
-              }}
             >
               {pdfDocuments.length >= MAX_PDFS ? '已达上限' : '添加PDF'}
               <input
@@ -556,6 +551,7 @@ const App: React.FC = () => {
                 onTabClick={handleTabClick}
                 onRemovePdf={handleRemovePdf}
                 onAddPdf={triggerFileUpload}
+                onFileChange={handleFileChange}
                 maxPdfs={MAX_PDFS}
               />
               <PdfCropper

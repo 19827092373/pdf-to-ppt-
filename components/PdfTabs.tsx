@@ -1,5 +1,6 @@
 import { X, Plus } from 'lucide-react';
 import { PdfMetadata } from '../types';
+import { useRef, useEffect } from 'react';
 
 interface PdfTabsProps {
   pdfDocuments: PdfMetadata[];
@@ -7,6 +8,7 @@ interface PdfTabsProps {
   onTabClick: (index: number) => void;
   onRemovePdf: (index: number) => void;
   onAddPdf: () => void;
+  onFileChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
   maxPdfs: number;
 }
 
@@ -16,13 +18,22 @@ export default function PdfTabs({
   onTabClick,
   onRemovePdf,
   onAddPdf,
+  onFileChange,
   maxPdfs,
 }: PdfTabsProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   if (pdfDocuments.length <= 1) {
     return null; // 单PDF时不显示标签栏
   }
 
   const canAddMore = pdfDocuments.length < maxPdfs;
+
+  const handleAddPdfClick = () => {
+    if (canAddMore && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
 
   // 截断过长的文件名
   const truncateFileName = (fileName: string, maxLength: number = 15) => {
@@ -67,19 +78,25 @@ export default function PdfTabs({
       ))}
 
       {canAddMore && (
-        <button
-          onClick={onAddPdf}
+        <label
           className="
             flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm
             bg-white text-gray-600 border border-dashed border-gray-300
             hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50
-            transition-all
+            transition-all cursor-pointer
           "
           title="添加PDF"
         >
           <Plus size={16} />
           <span>添加PDF</span>
-        </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={onFileChange}
+          />
+        </label>
       )}
     </div>
   );
