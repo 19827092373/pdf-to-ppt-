@@ -11,11 +11,22 @@ import { FileUp, BookOpen, AlertCircle, CodeXml, CheckCircle } from 'lucide-reac
 // Maximum number of PDFs allowed
 const MAX_PDFS = 3;
 
+// PDF设置接口
+interface PdfSettings {
+  zoom: number;
+  rotation: number;
+  renderScale: number;
+  currentPage: number;
+}
+
 const App: React.FC = () => {
   // Multi-PDF state management
   const [pdfDocuments, setPdfDocuments] = useState<PdfMetadata[]>([]);
   const [activePdfIndex, setActivePdfIndex] = useState(0);
   const [showSourceLabel, setShowSourceLabel] = useState(false);
+
+  // Per-PDF settings (zoom, rotation, renderScale, currentPage)
+  const [pdfSettings, setPdfSettings] = useState<Record<number, PdfSettings>>({});
 
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [fileName, setFileName] = useState<string>("presentation");
@@ -173,15 +184,50 @@ const App: React.FC = () => {
     fileInputRef.current?.click();
   };
 
-  // Handle PDF tab click
-  const handleTabClick = (index: number) => {
-    setActivePdfIndex(index);
+  // Get default settings for a new PDF
+  const getDefaultSettings = (): PdfSettings => ({
+    zoom: 1.0,
+    rotation: 0,
+    renderScale: 2.0,
+    currentPage: 1,
+  });
+
+  // Get settings for current PDF, or defaults if not set
+  const getCurrentPdfSettings = (): PdfSettings => {
+    return pdfSettings[activePdfIndex] || getDefaultSettings();
   };
 
-  // Handle PDF removal
+  // Update a specific setting for the current PDF
+  const updatePdfSetting = <K extends keyof PdfSettings>(key: K, value: PdfSettings[K]) => {
+    setPdfSettings(prev => ({
+      ...prev,
+      [activePdfIndex]: {
+        ...(prev[activePdfIndex] || getDefaultSettings()),
+        [key]: value,
+      },
+    }));
+  };
+
+  // Handle PDF removal - also clean up settings
   const handleRemovePdf = (index: number) => {
     setPdfDocuments(prev => {
       const updated = prev.filter((_, i) => i !== index);
+
+      // Clean up settings for removed PDF and reindex
+      setPdfSettings(settings => {
+        const newSettings: Record<number, PdfSettings> = {};
+        Object.entries(settings).forEach(([idx, setting]) => {
+          const numIdx = parseInt(idx);
+          if (numIdx < index) {
+            // Keep settings for PDFs before the removed one
+            newSettings[numIdx] = setting;
+          } else if (numIdx > index) {
+            // Shift settings for PDFs after the removed one
+            newSettings[numIdx - 1] = setting;
+          }
+        });
+        return newSettings;
+      });
 
       // Adjust active index if needed
       if (activePdfIndex >= updated.length && updated.length > 0) {
@@ -193,10 +239,16 @@ const App: React.FC = () => {
         setHistoryIndex(0);
         setFileName("presentation");
         setCustomFileName("presentation");
+        setPdfSettings({});
       }
 
       return updated;
     });
+  };
+
+  // Handle PDF tab click
+  const handleTabClick = (index: number) => {
+    setActivePdfIndex(index);
   };
 
   // Get the currently active PDF document
@@ -509,6 +561,14 @@ const App: React.FC = () => {
               <PdfCropper
                 pdfDocument={activePdfDocument}
                 onCropComplete={handleCropComplete}
+                zoom={getCurrentPdfSettings().zoom}
+                rotation={getCurrentPdfSettings().rotation}
+                renderScale={getCurrentPdfSettings().renderScale}
+                currentPage={getCurrentPdfSettings().currentPage}
+                onZoomChange={(v) => updatePdfSetting('zoom', v)}
+                onRotationChange={(v) => updatePdfSetting('rotation', v)}
+                onRenderScaleChange={(v) => updatePdfSetting('renderScale', v)}
+                onPageChange={(v) => updatePdfSetting('currentPage', v)}
               />
             </div>
             {/* Increased width from w-96 to w-[480px] */}

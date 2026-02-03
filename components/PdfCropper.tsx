@@ -6,13 +6,29 @@ import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-rea
 interface PdfCropperProps {
   pdfDocument: PDFDocument;
   onCropComplete: (image: CroppedImage, pageNumber?: number) => void;
+  // External control props for per-PDF settings
+  zoom: number;
+  rotation: number;
+  renderScale: number;
+  currentPage: number;
+  onZoomChange: (value: number) => void;
+  onRotationChange: (value: number) => void;
+  onRenderScaleChange: (value: number) => void;
+  onPageChange: (value: number) => void;
 }
 
-export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropComplete }) => {
-  const [renderScale, setRenderScale] = useState<number>(2.0); // Default to 2.0 (High Res)
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const [zoom, setZoom] = useState<number>(1.0); // 1.0 = 100% display size relative to original PDF point size
-  const [rotation, setRotation] = useState<number>(0); // 0, 90, 180, 270
+export const PdfCropper: React.FC<PdfCropperProps> = ({
+  pdfDocument,
+  onCropComplete,
+  zoom,
+  rotation,
+  renderScale,
+  currentPage,
+  onZoomChange,
+  onRotationChange,
+  onRenderScaleChange,
+  onPageChange,
+}) => {
   const [isRendering, setIsRendering] = useState<boolean>(false);
 
   // Crop state
@@ -73,7 +89,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
     const containerWidth = containerRef.current.clientWidth - 40; // -40 for padding
     const naturalWidth = canvasDims.width;
     const newZoom = containerWidth / naturalWidth;
-    setZoom(newZoom);
+    onZoomChange(newZoom);
   };
 
   const fitToPage = () => {
@@ -81,7 +97,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
     const containerHeight = containerRef.current.clientHeight - 40;
     const naturalHeight = canvasDims.height;
     const newZoom = containerHeight / naturalHeight;
-    setZoom(newZoom);
+    onZoomChange(newZoom);
   };
 
   // Coordinate helper
@@ -204,7 +220,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
   const changePage = (delta: number) => {
     const newPage = currentPage + delta;
     if (newPage >= 1 && newPage <= pdfDocument.numPages) {
-      setCurrentPage(newPage);
+      onPageChange(newPage);
       setStartPos(null);
       setCurrentRect(null);
     }
@@ -255,7 +271,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
           <span className="text-sm font-medium text-slate-600">清晰度:</span>
           <select
             value={renderScale}
-            onChange={(e) => setRenderScale(parseFloat(e.target.value))}
+            onChange={(e) => onRenderScaleChange(parseFloat(e.target.value))}
             className="px-2 py-1 bg-white border border-slate-300 rounded text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer hover:border-indigo-400 transition-colors"
           >
             <option value="1.5">1.5x (快速)</option>
@@ -276,7 +292,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
           </button>
           <div className="w-px h-4 bg-slate-300 mx-1"></div>
           <button
-            onClick={() => setRotation(r => (r + 90) % 360)}
+            onClick={() => onRotationChange((rotation + 90) % 360)}
             className="px-2 py-1 text-xs border rounded hover:bg-slate-100 font-medium flex items-center gap-1"
             title="旋转页面 (90°)"
           >
@@ -284,11 +300,11 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
             {rotation}°
           </button>
           <div className="w-px h-4 bg-slate-300 mx-1"></div>
-          <button onClick={() => setZoom(s => Math.max(0.1, s - 0.1))} className="p-1 rounded hover:bg-slate-100">
+          <button onClick={() => onZoomChange(Math.max(0.1, zoom - 0.1))} className="p-1 rounded hover:bg-slate-100">
             <ZoomOut className="w-5 h-5" />
           </button>
           <span className="text-xs text-slate-500 w-12 text-center select-none">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(s => Math.min(10.0, s + 0.1))} className="p-1 rounded hover:bg-slate-100">
+          <button onClick={() => onZoomChange(Math.min(10.0, zoom + 0.1))} className="p-1 rounded hover:bg-slate-100">
             <ZoomIn className="w-5 h-5" />
           </button>
         </div>
