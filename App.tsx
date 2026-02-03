@@ -1,13 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { PdfCropper } from './components/PdfCropper';
 import { SlideList } from './components/SlideList';
+import PdfTabs from './components/PdfTabs';
+import SourceToggle from './components/SourceToggle';
 import { generatePPT } from './utils/pptGenerator';
-import { SlideData, CroppedImage, PDFDocument } from './types';
+import { SlideData, CroppedImage, PdfMetadata } from './types';
 import { FileUp, BookOpen, AlertCircle, CodeXml, CheckCircle } from 'lucide-react';
 
+// Maximum number of PDFs allowed
+const MAX_PDFS = 3;
+
 const App: React.FC = () => {
-  const [pdfDocument, setPdfDocument] = useState<PDFDocument | null>(null);
+  // Multi-PDF state management
+  const [pdfDocuments, setPdfDocuments] = useState<PdfMetadata[]>([]);
+  const [activePdfIndex, setActivePdfIndex] = useState(0);
+  const [showSourceLabel, setShowSourceLabel] = useState(false);
+
   const [slides, setSlides] = useState<SlideData[]>([]);
   const [fileName, setFileName] = useState<string>("presentation");
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -23,13 +32,16 @@ const App: React.FC = () => {
   const [history, setHistory] = useState<SlideData[][]>([[]]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
+  // Ref for file input to trigger clicks
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Handle drag and drop
   // Handle drag and drop
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
 
-    // Disable drag upload in workspace (edit mode)
-    if (pdfDocument) return;
+    // Disable drag upload in workspace (edit mode) - only allow drag when we have fewer than MAX PDFs
+    if (pdfDocuments.length >= MAX_PDFS) return;
 
     // Only show overlay if dragging files (not internal elements like slides)
     if (e.dataTransfer.types.includes("Files")) {
@@ -48,8 +60,8 @@ const App: React.FC = () => {
     e.preventDefault();
     setIsDragOver(false);
 
-    // Disable drop in workspace
-    if (pdfDocument) return;
+    // Disable drop when we have reached max PDFs
+    if (pdfDocuments.length >= MAX_PDFS) return;
 
     const file = e.dataTransfer.files?.[0];
     if (!file) return;
@@ -62,10 +74,26 @@ const App: React.FC = () => {
     processFile(file);
   };
 
-  const processFile = (file: File) => {
+  const processFile = (file: File, isReplacement: boolean = false, replaceIndex?: number) => {
     setIsLoading(true);
     setError(null);
-    setFileName(file.name.replace('.pdf', ''));
+
+    // Check for duplicate file names (only for multiple PDFs)
+    const fileNameWithoutExt = file.name.replace('.pdf', '');
+    const isDuplicate = pdfDocuments.some(pdf => pdf.fileName === fileNameWithoutExt);
+
+    if (isDuplicate && pdfDocuments.length > 0) {
+      setIsLoading(false);
+      setError(`文件 "${file.name}" 已存在，请使用不同名称的文件。`);
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    // Set filename based on first PDF or keep existing
+    if (pdfDocuments.length === 0) {
+      setFileName(fileNameWithoutExt);
+      setCustomFileName(fileNameWithoutExt);
+    }
 
     // Check if PDF.js library is loaded
     if (!window.pdfjsLib) {
@@ -80,10 +108,33 @@ const App: React.FC = () => {
       try {
         const loadingTask = window.pdfjsLib!.getDocument(typedarray);
         const pdf = await loadingTask.promise;
-        setPdfDocument(pdf);
-        setSlides([]); // Reset slides on new file
-        setHistory([[]]); // Reset history
-        setHistoryIndex(0);
+
+        const newPdf: PdfMetadata = {
+          document: pdf,
+          fileName: fileNameWithoutExt,
+          id: uuidv4(),
+        };
+
+        if (isReplacement && replaceIndex !== undefined) {
+          // Replace existing PDF
+          setPdfDocuments(prev => {
+            const updated = [...prev];
+            updated[replaceIndex] = newPdf;
+            return updated;
+          });
+        } else {
+          // Add new PDF
+          setPdfDocuments(prev => [...prev, newPdf]);
+          // If this is the first PDF or an addition, switch to it
+          setActivePdfIndex(pdfDocuments.length);
+        }
+
+        // Only reset slides if this is the first PDF
+        if (pdfDocuments.length === 0) {
+          setSlides([]);
+          setHistory([[]]);
+          setHistoryIndex(0);
+        }
       } catch (err) {
         console.error(err);
         setError("无法加载 PDF，请尝试其他文件。");
@@ -104,8 +155,52 @@ const App: React.FC = () => {
       return;
     }
 
+    // Check if we've reached the maximum number of PDFs
+    if (pdfDocuments.length >= MAX_PDFS) {
+      setError(`最多支持 ${MAX_PDFS} 个 PDF 文件。`);
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
     processFile(file);
+
+    // Reset the input value so the same file can be selected again if needed
+    event.target.value = '';
   };
+
+  // Trigger file input click
+  const triggerFileUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Handle PDF tab click
+  const handleTabClick = (index: number) => {
+    setActivePdfIndex(index);
+  };
+
+  // Handle PDF removal
+  const handleRemovePdf = (index: number) => {
+    setPdfDocuments(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+
+      // Adjust active index if needed
+      if (activePdfIndex >= updated.length && updated.length > 0) {
+        setActivePdfIndex(updated.length - 1);
+      } else if (updated.length === 0) {
+        // No PDFs left, reset everything
+        setSlides([]);
+        setHistory([[]]);
+        setHistoryIndex(0);
+        setFileName("presentation");
+        setCustomFileName("presentation");
+      }
+
+      return updated;
+    });
+  };
+
+  // Get the currently active PDF document
+  const activePdfDocument = pdfDocuments[activePdfIndex]?.document || null;
 
   // Undo history functions
   const undo = () => {
@@ -136,11 +231,19 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [history, historyIndex]);
 
-  // When a crop happens, create a new slide
-  const handleCropComplete = (image: CroppedImage) => {
+  // When a crop happens, create a new slide with source info
+  const handleCropComplete = (image: CroppedImage, pageNumber?: number) => {
+    const activePdf = pdfDocuments[activePdfIndex];
+
+    const imageWithSource: CroppedImage = {
+      ...image,
+      sourcePdfName: activePdf?.fileName,
+      sourcePageNumber: pageNumber,
+    };
+
     const newSlide: SlideData = {
       id: uuidv4(),
-      images: [image]
+      images: [imageWithSource]
     };
     setSlides(prev => {
       const newSlides = [...prev, newSlide];
@@ -260,7 +363,7 @@ const App: React.FC = () => {
           </h1>
         </div>
 
-        {pdfDocument && (
+        {pdfDocuments.length > 0 && (
           <div className="flex items-center gap-4 text-sm">
             {isEditingFileName ? (
               <input
@@ -295,12 +398,26 @@ const App: React.FC = () => {
                 }}
                 title="点击编辑文件名"
               >
-                当前文件: <span className="font-semibold text-slate-800">{fileName}.pdf</span>
+                文件名: <span className="font-semibold text-slate-800">{fileName}</span>
               </span>
             )}
-            <label className="cursor-pointer text-indigo-600 hover:text-indigo-800 font-medium">
-              更换文件
-              <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} />
+            <label
+              className={`cursor-pointer font-medium ${pdfDocuments.length >= MAX_PDFS ? 'text-gray-400 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-800'}`}
+              onClick={() => {
+                if (pdfDocuments.length < MAX_PDFS) {
+                  triggerFileUpload();
+                }
+              }}
+            >
+              {pdfDocuments.length >= MAX_PDFS ? '已达上限' : '添加PDF'}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={pdfDocuments.length >= MAX_PDFS}
+              />
             </label>
           </div>
         )}
@@ -308,7 +425,7 @@ const App: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
-        {!pdfDocument ? (
+        {!activePdfDocument ? (
           // Upload State
           <div className="flex-1 flex flex-col items-center justify-center bg-slate-50 p-6 relative">
             <div
@@ -380,14 +497,27 @@ const App: React.FC = () => {
                 {success}
               </div>
             )}
-            <div className="flex-1 h-full min-w-0 border-r border-slate-200">
+            <div className="flex-1 h-full min-w-0 border-r border-slate-200 flex flex-col">
+              <PdfTabs
+                pdfDocuments={pdfDocuments}
+                activePdfIndex={activePdfIndex}
+                onTabClick={handleTabClick}
+                onRemovePdf={handleRemovePdf}
+                onAddPdf={triggerFileUpload}
+                maxPdfs={MAX_PDFS}
+              />
               <PdfCropper
-                pdfDocument={pdfDocument}
+                pdfDocument={activePdfDocument}
                 onCropComplete={handleCropComplete}
               />
             </div>
             {/* Increased width from w-96 to w-[480px] */}
             <div className="w-[320px] h-full border-l border-slate-200 shadow-xl z-20">
+              <SourceToggle
+                showSourceLabel={showSourceLabel}
+                onToggle={setShowSourceLabel}
+                hasMultiplePdfs={pdfDocuments.length > 1}
+              />
               <SlideList
                 slides={slides}
                 onDeleteSlide={handleDeleteSlide}
@@ -395,6 +525,7 @@ const App: React.FC = () => {
                 onMergeUp={handleMergeUp}
                 onExport={handleExport}
                 onReorder={handleReorderSlides}
+                showSourceLabel={showSourceLabel}
               />
             </div>
           </>

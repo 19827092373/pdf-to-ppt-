@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-rea
 
 interface PdfCropperProps {
   pdfDocument: PDFDocument;
-  onCropComplete: (image: CroppedImage) => void;
+  onCropComplete: (image: CroppedImage, pageNumber?: number) => void;
 }
 
 export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropComplete }) => {
@@ -183,7 +183,7 @@ export const PdfCropper: React.FC<PdfCropperProps> = ({ pdfDocument, onCropCompl
           width: actualWidth,
           height: actualHeight,
           aspectRatio: actualWidth / actualHeight
-        });
+        }, currentPage);
       }
 
       // Reset selection visualization

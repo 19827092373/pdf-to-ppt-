@@ -9,6 +9,7 @@ interface SlideListProps {
   onMergeUp: (slideId: string) => void;
   onExport: () => void;
   onReorder: (dragIndex: number, hoverIndex: number) => void;
+  showSourceLabel?: boolean;
 }
 
 export const SlideList: React.FC<SlideListProps> = ({
@@ -17,7 +18,8 @@ export const SlideList: React.FC<SlideListProps> = ({
   onDeleteImage,
   onMergeUp,
   onExport,
-  onReorder
+  onReorder,
+  showSourceLabel = false
 }) => {
   const [draggedIndex, setDraggedIndex] = React.useState<number | null>(null);
 
@@ -112,13 +114,21 @@ export const SlideList: React.FC<SlideListProps> = ({
               <div className="aspect-video bg-white border border-slate-200 rounded relative flex flex-col p-2 gap-2">
                 {slide.images.map((img, imgIndex) => (
                   <div key={img.id} className="relative group/img flex-1 flex items-start justify-start w-full overflow-hidden">
-                    <img
-                      src={img.dataUrl}
-                      alt={`Clip ${imgIndex}`}
-                      className="max-h-full max-w-full object-contain border border-transparent"
-                      // Alignment: Left Top
-                      style={{ alignSelf: 'flex-start' }}
-                    />
+                    <div className="relative flex-1">
+                      <img
+                        src={img.dataUrl}
+                        alt={`Clip ${imgIndex}`}
+                        className="max-h-full max-w-full object-contain border border-transparent"
+                        // Alignment: Left Top
+                        style={{ alignSelf: 'flex-start' }}
+                      />
+                      {/* Source label - shown only when enabled and source info exists */}
+                      {showSourceLabel && img.sourcePdfName && img.sourcePageNumber && (
+                        <div className="absolute top-0 left-0 bg-gray-800/80 text-white text-xs px-2 py-0.5 rounded-br select-none">
+                          {img.sourcePdfName}-P{img.sourcePageNumber}
+                        </div>
+                      )}
+                    </div>
                     <button
                       onClick={() => onDeleteImage(slide.id, img.id)}
                       className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"

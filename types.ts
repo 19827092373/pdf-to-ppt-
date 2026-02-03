@@ -11,6 +11,9 @@ export interface CroppedImage {
   width: number;
   height: number;
   aspectRatio: number; // width / height
+  // 来源信息（多PDF支持）
+  sourcePdfName?: string;   // PDF文件名
+  sourcePageNumber?: number; // 页码
 }
 
 export interface SlideData {
@@ -39,6 +42,13 @@ export interface PDFViewport {
 
 export interface PDFLoadingTask {
   promise: Promise<PDFDocument>;
+}
+
+// PDF文档元数据（多PDF支持）
+export interface PdfMetadata {
+  document: PDFDocument;
+  fileName: string;
+  id: string;  // 唯一标识
 }
 
 export interface PDFDocument {
